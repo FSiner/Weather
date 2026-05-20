@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 라이프 앰비언트 날씨 대시보드</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html {
+            width: 100%; height: 100%;
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            overflow-x: hidden; background-color: #121318; color: white;
+        }
+
+        #bg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transition: background 2s ease-in-out; z-index: 1; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+
+        .main-wrapper {
+            position: relative; z-index: 3; width: 100%; min-height: 100%;
+            display: flex; justify-content: center; align-items: center; padding: 40px 10px;
+        }
+
+        .dashboard {
+            background: rgba(0, 0, 0, 0.5); padding: 30px; border-radius: 24px;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            width: 100%; max-width: 480px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: opacity 0.5s ease;
+        }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; gap: 8px; }
+        .clock-box { font-size: 2rem; font-weight: 700; letter-spacing: 1px; flex-grow: 1; }
+        
+        .ctrl-btn { background: rgba(255,255,255,0.12); border: none; padding: 8px 14px; color: white; border-radius: 20px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; white-space: nowrap; }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.25); }
+        .audio-on { background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); }
+
+        /* API 설정 가이드 레이아웃 */
+        .api-config-box { background: rgba(255, 152, 0, 0.15); border: 1px dashed rgba(255, 152, 0, 0.4); padding: 12px; border-radius: 12px; margin-bottom: 15px; font-size: 0.85rem; }
+        .api-input-group { display: flex; gap: 6px; margin-top: 8px; }
+        .api-input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 0.8rem; outline: none; }
+        .api-save-btn { background: #ff9800; border: none; padding: 6px 12px; color: black; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .api-save-btn:hover { background: #e68a00; }
+
+        .select-group { display: flex; gap: 8px; margin-bottom: 20px; }
+        .weather-select {
+            flex: 1; padding: 10px; font-size: 0.85rem; border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px; background: rgba(255, 255, 255, 0.15); color: white; outline: none; cursor: pointer;
+        }
+        .weather-select option { background: #1a1c23; color: white; }
+
+        .location { font-size: 1.6rem; font-weight: bold; }
+        .weather-main { display: flex; align-items: center; justify-content: center; gap: 5px; margin: 5px 0; }
+        .weather-icon { width: 60px; height: 60px; }
+        .temp { font-size: 3.8rem; font-weight: 300; }
+        .description { font-size: 1.1rem; margin-bottom: 15px; color: #e5e5ea; }
+
+        .smart-section { background: rgba(255, 255, 255, 0.07); padding: 15px; border-radius: 14px; margin-bottom: 15px; text-align: left; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.03); }
+        .section-title { font-size: 0.8rem; color: #aaaaae; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; }
+        
+        .coordi-text { font-weight: bold; color: #ffeb3b; line-height: 1.4; }
+        .timeline-box { display: flex; justify-content: space-between; margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .timeline-item { text-align: center; flex: 1; font-size: 0.8rem; }
+        .memo-area { width: 100%; height: 60px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; padding: 8px; font-size: 0.85rem; resize: none; outline: none; }
+
+        .status-msg { font-size: 0.85rem; color: #ff6b6b; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="bg-overlay"></div>
+    <canvas id="particle-canvas"></canvas>
+
+    <div class="main-wrapper">
+        <div class="dashboard" id="main-card">
+            
+            <div class="top-bar">
+                <div id="clock" class="clock-box">00:00:00</div>
+                <button class="ctrl-btn" id="audio-trigger" onclick="toggleAudio()">사운드 OFF 🔇</button>
+                <button class="ctrl-btn" id="pomo-trigger" onclick="togglePomodoro()">집중 모드 ⏱️</button>
+            </div>
+
+            <!-- 안전한 오픈 배포용 API 입력 관리 UI -->
+            <div class="api-config-box" id="api-ui-block">
+                <div>⚠️ <b>공공 사용을 위한 설정:</b> 오픈웨더 API 키를 입력해 주세요. 키는 유저 본인의 브라우저에만 안전하게 저장됩니다.</div>
+                <div class="api-input-group">
+                    <input type="password" id="api-user-key" class="api-input" placeholder="OpenWeatherMap API Key 입력">
+                    <button class="api-save-btn" onclick="saveUserApiKey()">등록</button>
+                </div>
+            </div>
+
+            <!-- 대한민국 전국 17개 지자체 확장 데이터 베이스 연동 셀렉터 -->
+            <div class="select-group">
+                <select id="main-region" class="weather-select" onchange="updateSubRegions()">
+                    <option value="" disabled selected>시/도 선택</option>
+                    <option value="seoul">서울특별시</option>
+                    <option value="busan">부산광역시</option>
+                    <option value="daegu">대구광역시</option>
+                    <option value="incheon">인천광역시</option>
+                    <option value="gwangju">광주광역시</option>
+                    <option value="daejeon">대전광역시</option>
+                    <option value="ulsan">울산광역시</option>
+                    <option value="sejong">세종특별자치시</option>
+                    <option value="gyeonggi">경기도</option>
+                    <option value="gangwon">강원도</option>
+                    <option value="chungbuk">충청북도</option>
+                    <option value="chungnam">충청남도</option>
+                    <option value="jeonbuk">전라북도</option>
+                    <option value="jeonnam">전라남도</option>
+                    <option value="gyeongbuk">경상북도</option>
+                    <option value="gyeongnam">경상남도</option>
+                    <option value="jeju">제주특별자치도</option>
+                </select>
+                <select id="sub-region" class="weather-select" onchange="changeLiveRegion()" disabled>
+                    <option value="" disabled selected>시/군/구 선택</option>
+                </select>
+            </div>
+
+            <div id="location" class="location">지역을 선택해 주세요</div>
+            <div class="weather-main">
+                <img id="w-icon" class="weather-icon" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="icon" style="display:none;">
+                <div id="temp" class="temp">--°</div>
+            </div>
+            <div id="description" class="description">라이브 동기화 대기 중</div>
+
+            <div class="smart-section">
+                <div class="section-title">👔 오늘의 추천 의상</div>
+                <div id="coordi-advice" class="coordi-text">지역을 선택하면 추천 코디가 계산됩니다.</div>
+            </div>
+
+            <div class="smart-section">
+                <div class="section-title">⏱️ 향후 외출 예보 타임라인</div>
+                <div class="timeline-box" id="timeline-container">
+                    <div class="timeline-item">3시간 뒤<br><b>--°C</b></div>
+                    <div class="timeline-item">6시간 뒤<br><b>--°C</b></div>
+                    <div class="timeline-item">9시간 뒤<br><b>--°C</b></div>
+                </div>
+            </div>
+
+            <div class="smart-section">
+                <div class="section-title">📝 외출 전 체크리스트 / 메모</div>
+                <textarea id="memo-pad" class="memo-area" placeholder="새로고침해도 보존되는 미니 메모장입니다..." oninput="saveMemo()"></textarea>
+            </div>
+
+            <div id="status-msg" class="status-msg"></div>
+        </div>
+    </div>
+
+    <script>
+        let targetCityCode = "";
+        let liveTimer = null;
+        let canvas, ctx, animationFrameId;
+        let particles = [];
+        let pomoInterval = null;
+        let isPomoActive = false;
+
+        let audioCtx = null;
+        let ambientSourceNode = null;
+        let isAudioPlaying = false;
+        let currentWeatherData = "Default";
+
+        // 대한민국 전국 핵심 행정구역 영문 API 매핑 데이터베이스 전체 구축
+        const regionDatabase = {
+            seoul: [{ name: "서울 중심부", code: "Seoul" }, { name: "강남", code: "Gangnam" }, { name: "마포", code: "Mapo" }],
+            busan: [{ name: "부산 중심부", code: "Busan" }, { name: "해운대", code: "Haeundae" }],
+            daegu: [{ name: "대구", code: "Daegu" }],
+            incheon: [{ name: "인천", code: "Incheon" }, { name: "송도", code: "Songdo" }],
+            gwangju: [{ name: "광주", code: "Gwangju" }],
+            daejeon: [{ name: "대전", code: "Daejeon" }],
+            ulsan: [{ name: "울산", code: "Ulsan" }],
+            sejong: [{ name: "세종시", code: "Sejong" }],
+            gyeonggi: [{ name: "수원시", code: "Suwon" }, { name: "고양시", code: "Goyang" }, { name: "성남 분당", code: "Seongnam" }, { name: "부천시", code: "Bucheon" }],
+            gangwon: [{ name: "춘천시", code: "Chuncheon" }, { name: "강릉시", code: "Gangneung" }, { name: "원주시", code: "Wonju" }],
+            chungbuk: [{ name: "청주시", code: "Cheongju" }, { name: "충주시", code: "Chungju" }],
+            chungnam: [{ name: "천안시", code: "Cheonan" }, { name: "아산시", code: "Asan" }],
+            jeonbuk: [{ name: "전주시", code: "Jeonju" }, { name: "군산시", code: "Gunsan" }],
+            jeonnam: [{ name: "목포시", code: "Mokpo" }, { name: "여수시", code: "Yeosu" }],
+            gyeongbuk: [{ name: "포항시", code: "Pohang" }, { name: "구미시", code: "Gumi" }, { name: "경주시", code: "Gyeongju" }],
+            gyeongnam: [{ name: "창원시", code: "Changwon" }, { name: "진주시", code: "Jinju" }, { name: "김해시", code: "Gimhae" }],
+            jeju: [{ name: "제주시", code: "Jeju" }, { name: "서귀포시", code: "Seogwipo" }]
+        };
+
+        const backgroundsDay = { Clear: 'linear-gradient(135deg, #f7b733, #fc4a1a)', Clouds: 'linear-gradient(135deg, #bdc3c7, #2c3e50)', Rain: 'linear-gradient(135deg, #4b6cb7, #182848)', Snow: 'linear-gradient(135deg, #e6dada, #274046)', Default: 'linear-gradient(135deg, #2c3e50, #000000)' };
+        const backgroundsNight = { Clear: 'linear-gradient(135deg, #0f2027, #2c5364)', Clouds: 'linear-gradient(135deg, #111318, #2c3e50)', Rain: 'linear-gradient(135deg, #050c1a, #1a2a44)', Snow: 'linear-gradient(135deg, #1c262f, #3b4d5c)', Default: 'linear-gradient(135deg, #0f1115, #000000)' };
+
+        function getApiKey() {
+            return localStorage.getItem('user_openweather_key') || "";
+        }
+
+        function saveUserApiKey() {
+            const val = document.getElementById('api-user-key').value.trim();
+            if(!val) { alert("올바른 API 키를 입력하세요."); return; }
+            localStorage.setItem('user_openweather_key', val);
+            document.getElementById('api-ui-block').style.display = 'none';
+            alert("API 키가 안전하게 등록되었습니다! 지역을 선택하시면 실시간 연동이 시작됩니다.");
+            if(targetCityCode) initWeatherSync();
+        }
+
+        function startClock() {
+            setInterval(() => {
+                if(isPomoActive) return;
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+            }, 1000);
+        }
+
+        function togglePomodoro() {
+            const btn = document.getElementById('pomo-trigger');
+            const card = document.getElementById('main-card');
+            const clockDisplay = document.getElementById('clock');
+
+            if (!isPomoActive) {
+                isPomoActive = true; btn.innerText = "집중 해제 ❌"; card.style.opacity = "0.15";
+                let timeLeft = 25 * 60; clockDisplay.innerText = "25:00";
+                pomoInterval = setInterval(() => {
+                    timeLeft--;
+                    let min = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                    let sec = (timeLeft % 60).toString().padStart(2, '0');
+                    clockDisplay.innerText = `${min}:${sec}`;
+                    if(timeLeft <= 0) { clearInterval(pomoInterval); alert("25분 집중 완료!"); togglePomodoro(); }
+                }, 1000);
+            } else {
+                isPomoActive = false; clearInterval(pomoInterval); btn.innerText = "집중 모드 ⏱️"; card.style.opacity = "1";
+            }
+        }
+
+        function toggleAudio() {
+            const btn = document.getElementById('audio-trigger');
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!isAudioPlaying) {
+                isAudioPlaying = true; btn.innerText = "사운드 ON 🔊"; btn.classList.add('audio-on'); playAmbientSound(currentWeatherData);
+            } else {
+                isAudioPlaying = false; btn.innerText = "사운드 OFF 🔇"; btn.classList.remove('audio-on'); stopAmbientSound();
+            }
+        }
+
+        function playAmbientSound(weather) {
+            if (!isAudioPlaying || !audioCtx) return;
+            stopAmbientSound();
+
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+            const whiteNoise = audioCtx.createBufferSource();
+            whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            const gainNode = audioCtx.createGain();
+
+            if (weather === 'Rain' || weather === 'Drizzle' || weather === 'Thunderstorm') {
+                filter.type = 'highpass'; filter.frequency.setValueAtTime(1200, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            } else if (weather === 'Clouds' || weather === 'Mist' || weather === 'Fog') {
+                filter.type = 'lowpass'; filter.frequency.setValueAtTime(250, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            } else if (weather === 'Snow') {
+                filter.type = 'lowpass'; filter.frequency.setValueAtTime(80, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            } else {
+                filter.type = 'bandpass'; filter.frequency.setValueAtTime(600, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+            }
+
+            whiteNoise.connect(filter); filter.connect(gainNode); gainNode.connect(audioCtx.destination);
+            whiteNoise.start(); ambientSourceNode = whiteNoise;
+        }
+
+        function stopAmbientSound() {
+            if (ambientSourceNode) { try { ambientSourceNode.stop(); } catch(e) {} ambientSourceNode = null; }
+        }
+
+        function saveMemo() { localStorage.setItem('weather_dashboard_memo', document.getElementById('memo-pad').value); }
+
+        function updateSubRegions() {
+            const mainSel = document.getElementById('main-region');
+            const subSel = document.getElementById('sub-region');
+            subSel.innerHTML = '<option value="" disabled selected>시/군/구 선택</option>';
+            if (regionDatabase[mainSel.value]) {
+                regionDatabase[mainSel.value].forEach(item => {
+                    const opt = document.createElement('option'); opt.value = item.code; opt.innerText = item.name;
+                    subSel.appendChild(opt);
+                });
+                subSel.disabled = false;
+            }
+        }
+
+        function changeLiveRegion() {
+            const mainSel = document.getElementById('main-region');
+            const subSel = document.getElementById('sub-region');
+            targetCityCode = subSel.value; if (!targetCityCode) return;
+
+            localStorage.setItem('saved_main', mainSel.value);
+            localStorage.setItem('saved_sub', targetCityCode);
+            initWeatherSync();
+        }
+
+        function initWeatherSync() {
+            if (!getApiKey()) { alert("상단의 주황색 박스에 오픈웨더 API 키를 먼저 입력하고 등록해 주세요!"); return; }
+            if (liveTimer) clearInterval(liveTimer);
+            fetchSmartDashboardData(targetCityCode);
+            liveTimer = setInterval(() => fetchSmartDashboardData(targetCityCode), 600000);
+        }
+
+        async function fetchSmartDashboardData(cityCode) {
+            const statusMsg = document.getElementById('status-msg');
+            const KEY = getApiKey();
+            const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
+            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
+
+            try {
+                const [cRes, fRes] = await Promise.all([fetch(currentUrl), fetch(forecastUrl)]);
+                if (!cRes.ok) throw new Error('API 키가 올바르지 않거나 동기화에 실패했습니다.');
+                
+                const currentData = await cRes.json();
+                const forecastData = await fRes.json();
+
+                statusMsg.style.display = 'none';
+                updateDashboardUI(currentData, forecastData);
+            } catch (error) {
+                statusMsg.innerText = error.message; statusMsg.style.display = 'block';
+            }
+        }
+
+        function updateDashboardUI(cData, fData) {
+            currentWeatherData = cData.weather[0].main;
+            const temp = Math.round(cData.main.temp);
+            const iconCode = cData.weather[0].icon;
+            const isNight = iconCode.includes('n');
+
+            const subSel = document.getElementById('sub-region');
+            document.getElementById('location').innerText = subSel.options[subSel.selectedIndex].text;
+            document.getElementById('temp').innerText = `${temp}°`;
+            document.getElementById('description').innerText = cData.weather[0].description;
+
+            const iconImg = document.getElementById('w-icon');
+            iconImg.src = `https://openweathermap.org/img/wn/${iconCode}@2x.png`; iconImg.style.display = 'block';
+
+            const bgContainer = document.getElementById('bg-overlay');
+            const styleTable = isNight ? backgroundsNight : backgroundsDay;
+            bgContainer.style.background = styleTable[currentWeatherData] || styleTable['Default'];
+
+            calculateClothing(temp, currentWeatherData);
+            calculateTimeline(fData);
+            initParticleEffect(currentWeatherData);
+
+            if (isAudioPlaying) playAmbientSound(currentWeatherData);
+        }
+
+        function calculateClothing(temp, weather) {
+            let advice = "";
+            if (temp >= 23) advice = "반팔 티셔츠, 얇은 셔츠, 반바지가 어울리는 날씨예요. 👕";
+            else if (temp >= 17 && temp < 23) advice = "맨투맨, 얇은 니트, 가디건에 긴바지를 추천해요. 🧥";
+            else if (temp >= 9 && temp < 17) advice = "자켓, 트렌치코트, 야상을 꺼내세요. 👔";
+            else advice = "패딩, 두꺼운 코트가 필수입니다. 목도리로 체온을 보호하세요! 🧣";
+
+            if(weather === 'Rain' || weather === 'Drizzle') advice += " <br><span style='color:#a8d1ff;'>※ 비가 오니 우산을 확실히 구비하세요! ☔</span>";
+            document.getElementById('coordi-advice').innerHTML = advice;
+        }
+
+        function calculateTimeline(fData) {
+            const container = document.getElementById('timeline-container'); container.innerHTML = "";
+            for (let i = 1; i <= 3; i++) {
+                const targetForecast = fData.list[i]; if(!targetForecast) break;
+                const fTemp = Math.round(targetForecast.main.temp);
+                const fTime = targetForecast.dt_txt.substring(11, 16);
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.innerHTML = `${fTime}<br><b style="font-size:1.1rem; color:#81c784;">${fTemp}°C</b><br><span style="font-size:0.72rem; color:#bbb;">${targetForecast.weather[0].description}</span>`;
+                container.appendChild(item);
+            }
+        }
+
+        function initParticleEffect(weather) {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId); particles = [];
+            if (weather !== 'Rain' && weather !== 'Drizzle' && weather !== 'Snow') { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+            const max = weather === 'Snow' ? 60 : 120;
+            for (let i = 0; i < max; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                    speed: weather === 'Snow' ? (Math.random() * 0.8 + 0.4) : (Math.random() * 4 + 7),
+                    length: weather === 'Snow' ? Math.random() * 3 + 1.5 : Math.random() * 14 + 8, wobble: Math.random() * 2
+                });
+            }
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = weather === 'Snow' ? 'rgba(255,255,255,0.6)' : 'rgba(174,194,224,0.4)'; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                particles.forEach(p => {
+                    ctx.beginPath();
+                    if (weather === 'Snow') {
+                        p.x += Math.sin(p.wobble) * 0.2; p.wobble += 0.01; ctx.arc(p.x, p.y, p.length, 0, Math.PI * 2); ctx.fill();
+                    } else {
+                        ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + p.length); ctx.stroke();
+                    }
+                    p.y += p.speed; if (p.y > canvas.height) { p.y = -20; p.x = Math.random() * canvas.width; }
+                });
+                animationFrameId = requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+
+        window.onload = function() {
+            startClock();
+            canvas = document.getElementById('particle-canvas'); ctx = canvas.getContext('2d');
+            window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+            if(getApiKey()) document.getElementById('api-ui-block').style.display = 'none';
+
+            const savedMemo = localStorage.getItem('weather_dashboard_memo');
+            if(savedMemo) document.getElementById('memo-pad').value = savedMemo;
+
+            const savedMain = localStorage.getItem('saved_main');
+            const savedSub = localStorage.getItem('saved_sub');
+            if (savedMain && savedSub) {
+                document.getElementById('main-region').value = savedMain; updateSubRegions();
+                document.getElementById('sub-region').value = savedSub; targetCityCode = savedSub;
+                if(getApiKey()) initWeatherSync();
+            }
+        }
+    </script>
+</body>
+</html>
