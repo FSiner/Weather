@@ -157,6 +157,9 @@
         let isAudioPlaying = false;
         let currentWeatherData = "Default";
 
+        // 메모리 버퍼 사전 렌더링 풀
+        let preRenderedBuffers = {};
+
         const regionDatabase = {
             seoul: [
                 { name: "서울 중심부", code: "Seoul" }, { name: "강남구", code: "Gangnam" }, { name: "마포구", code: "Mapo" }, 
@@ -189,9 +192,7 @@
                 { name: "울산 중심부", code: "Ulsan" }, { name: "남구", code: "Nam-gu" }, { name: "울주군", code: "Ulju-gun" },
                 { name: "중구", code: "Jung-gu" }, { name: "북구", code: "Buk-gu" }, { name: "동구", code: "Dong-gu" }
             ],
-            sejong: [
-                { name: "세종특별자치시", code: "Sejong" }
-            ],
+            sejong: [{ name: "세종특별자치시", code: "Sejong" }],
             gyeonggi: [
                 { name: "수원시", code: "Suwon" }, { name: "고양시", code: "Goyang-si" }, { name: "성남시 분당", code: "Seongnam" }, 
                 { name: "부천시", code: "Bucheon-si" }, { name: "용인시", code: "Yongin" }, { name: "안산시", code: "Ansan" }, 
@@ -298,102 +299,142 @@
             }
         }
 
-        function toggleAudio() {
-            const btn = document.getElementById('audio-trigger');
+        // 🎵 고품질 사전 렌더링 오디오 데이터 설계 엔진
+        function initAudioEngine() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (!isAudioPlaying) {
-                isAudioPlaying = true; btn.innerText = "사운드 ON 🔊"; btn.classList.add('audio-on'); playAmbientSound(currentWeatherData);
-            } else {
-                isAudioPlaying = false; btn.innerText = "사운드 OFF 🔇"; btn.classList.remove('audio-on'); stopAmbientSound();
+            
+            const sampleRate = audioCtx.sampleRate;
+            const bufferSeconds = 5; // 루프용 5초 버퍼 크기
+            const numSamples = sampleRate * bufferSeconds;
+
+            // 1. 갈색 오디오 소스 프리-버퍼링 (포근한 빗소리/바람 베이스)
+            if (!preRenderedBuffers['brown']) {
+                const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
+                const data = buffer.getChannelData(0);
+                let lastOut = 0.0;
+                for (let i = 0; i < numSamples; i++) {
+                    const white = Math.random() * 2 - 1;
+                    // 저음 가중치 순수 하드웨어 필터식 모사
+                    data[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = data[i];
+                    data[i] *= 3.5; // 자연스러운 진폭 스케일링
+                }
+                preRenderedBuffers['brown'] = buffer;
+            }
+
+            // 2. 핑크 오디오 소스 프리-버퍼링 (부드러운 미세 자연 앰비언스)
+            if (!preRenderedBuffers['pink']) {
+                const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
+                const data = buffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                for (let i = 0; i < numSamples; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                    b6 = white * 0.115926;
+                    data[i] *= 0.11; 
+                }
+                preRenderedBuffers['pink'] = buffer;
             }
         }
 
-        // 🌧️ 리얼리스틱 사운드 합성 엔진 통합 파트
+        function toggleAudio() {
+            const btn = document.getElementById('audio-trigger');
+            initAudioEngine();
+
+            if (!isAudioPlaying) {
+                isAudioPlaying = true; btn.innerText = "사운드 ON 🔊"; btn.classList.add('audio-on'); 
+                playAmbientSound(currentWeatherData);
+            } else {
+                isAudioPlaying = false; btn.innerText = "사운드 OFF 🔇"; btn.classList.remove('audio-on'); 
+                stopAmbientSound();
+            }
+        }
+
         function playAmbientSound(weather) {
             if (!isAudioPlaying || !audioCtx) return;
             stopAmbientSound();
 
-            // 1. 갈색 소음(Brown Noise) 생성기: 중저음 중심의 현실적인 빗소리 레이어
-            const bufferSize = 4 * audioCtx.sampleRate;
-            const brownBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = brownBuffer.getChannelData(0);
-            
-            let lastOut = 0.0;
-            for (let i = 0; i < bufferSize; i++) {
-                const white = Math.random() * 2 - 1;
-                // 주파수 감쇄 공식으로 먹먹하고 포근한 자연의 비 사운드 유도
-                output[i] = (lastOut + (0.02 * white)) / 1.02;
-                lastOut = output[i];
-                output[i] *= 3.5; 
-            }
-
-            const rainBaseSource = audioCtx.createBufferSource();
-            rainBaseSource.buffer = brownBuffer;
-            rainBaseSource.loop = true;
-
             const mainFilter = audioCtx.createBiquadFilter();
             const mainGain = audioCtx.createGain();
+            let sourceNode = audioCtx.createBufferSource();
 
-            if (weather === 'Rain' || weather === 'Drizzle' || weather === 'Thunderstorm') {
+            // 날씨 식별자 가공
+            const condition = weather === 'Drizzle' || weather === 'Thunderstorm' ? 'Rain' : weather;
+
+            if (condition === 'Rain') {
+                // 비: 고밀도 갈색 노이즈 레이어 + 로우패스 필터 결합
+                sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(1400, audioCtx.currentTime); 
-                mainGain.gain.setValueAtTime(0.22, audioCtx.currentTime);
-            } else if (weather === 'Clouds' || weather === 'Mist' || weather === 'Fog') {
+                mainFilter.frequency.setValueAtTime(1100, audioCtx.currentTime); 
+                mainGain.gain.setValueAtTime(0.28, audioCtx.currentTime);
+            } else if (condition === 'Clouds' || condition === 'Mist' || condition === 'Fog') {
+                // 흐림: 깊고 은은하게 흔들리는 초저음 바람소리
+                sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(300, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-            } else if (weather === 'Snow') {
+                mainFilter.frequency.setValueAtTime(220, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+            } else if (condition === 'Snow') {
+                // 눈: 소리가 완벽히 차단된 정적의 먹먹함
+                sourceNode.buffer = preRenderedBuffers['pink'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(150, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(120, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.18, audioCtx.currentTime);
             } else {
+                // 맑음/기본: 투명하게 맑은 자연 앰비언트 리버브
+                sourceNode.buffer = preRenderedBuffers['pink'];
                 mainFilter.type = 'bandpass';
-                mainFilter.frequency.setValueAtTime(500, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(450, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
             }
 
-            rainBaseSource.connect(mainFilter);
+            sourceNode.loop = true;
+            sourceNode.connect(mainFilter);
             mainFilter.connect(mainGain);
             mainGain.connect(audioCtx.destination);
-            rainBaseSource.start();
+            sourceNode.start();
 
-            // 2. 무작위 공간감 빗방울(Raindrops Trigger) 엔진 (비 올 때만 구동)
+            // ☔ 실시간 입체 빗방울 엔진 (오류 없는 가벼운 개별 타격 방식)
             let dropInterval = null;
-            if (weather === 'Rain' || weather === 'Thunderstorm') {
+            if (condition === 'Rain') {
                 dropInterval = setInterval(() => {
                     if (!isAudioPlaying || !audioCtx) { clearInterval(dropInterval); return; }
                     
-                    if (Math.random() > 0.3) {
+                    if (Math.random() > 0.35) {
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
                         const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
 
                         osc.type = 'sine';
-                        const baseFreq = 120 + Math.random() * 230;
-                        osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
-                        
-                        // "툭/탁" 하는 유리창 충격음 모사
-                        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.04);
+                        // 물방울 타격 구간 주파수 디자인
+                        const randomFreq = 140 + Math.random() * 210;
+                        osc.frequency.setValueAtTime(randomFreq, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.035);
 
-                        const dropVolume = 0.02 + Math.random() * 0.05;
-                        gain.gain.setValueAtTime(dropVolume, audioCtx.currentTime);
-                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+                        const targetVol = 0.015 + Math.random() * 0.045;
+                        gain.gain.setValueAtTime(targetVol, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.035);
 
                         if (panner) {
-                            panner.pan.setValueAtTime(Math.random() * 2 - 1, audioCtx.currentTime);
+                            panner.pan.setValueAtTime(Math.random() * 1.8 - 0.9, audioCtx.currentTime);
                             osc.connect(gain).connect(panner).connect(audioCtx.destination);
                         } else {
                             osc.connect(gain).connect(audioCtx.destination);
                         }
 
                         osc.start();
-                        osc.stop(audioCtx.currentTime + 0.05);
+                        osc.stop(audioCtx.currentTime + 0.04);
                     }
-                }, 40);
+                }, 45);
             }
 
             ambientSourceNode = {
-                baseSource: rainBaseSource,
+                baseSource: sourceNode,
                 interval: dropInterval
             };
         }
@@ -546,7 +587,10 @@
             canvas = document.getElementById('particle-canvas'); ctx = canvas.getContext('2d');
             window.addEventListener('resize', resizeCanvas); resizeCanvas();
 
-            if(getApiKey()) document.getElementById('api-ui-block').style.display = 'none';
+            if(getApiKey()) {
+                document.getElementById('api-ui-block').style.display = 'none';
+                initAudioEngine(); // 키가 있을 시 선제 오디오 버퍼 로드
+            }
 
             const savedMemo = localStorage.getItem('weather_dashboard_memo');
             if(savedMemo) document.getElementById('memo-pad').value = savedMemo;
