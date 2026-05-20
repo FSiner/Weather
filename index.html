@@ -88,7 +88,6 @@
                 </div>
             </div>
 
-            <!-- 지역 셀렉터 양식 (상하 배치로 변경하여 가독성 확보) -->
             <div class="select-group">
                 <select id="main-region" class="weather-select" onchange="updateSubRegions()">
                     <option value="" disabled selected>시/도 선택</option>
@@ -158,77 +157,100 @@
         let isAudioPlaying = false;
         let currentWeatherData = "Default";
 
-        // 🔥 대한민국 전국 17개 지자체 소속 시·군·구 핵심 데이터베이스 대확장 완료
         const regionDatabase = {
             seoul: [
                 { name: "서울 중심부", code: "Seoul" }, { name: "강남구", code: "Gangnam" }, { name: "마포구", code: "Mapo" }, 
                 { name: "종로구", code: "Jongno" }, { name: "서초구", code: "Seocho" }, { name: "송파구", code: "Songpa" }, 
-                { name: "영등포구", code: "Yeongdeungpo" }, { name: "성북구", code: "Seongbuk" }, { name: "노원구", code: "Nowon" }
+                { name: "영등포구", code: "Yeongdeungpo" }, { name: "성북구", code: "Seongbuk" }, { name: "노원구", code: "Nowon" },
+                { name: "은평구", code: "Eunpyeong" }, { name: "강동구", code: "Gangdong-gu" }, { name: "관악구", code: "Gwanak" }
             ],
             busan: [
                 { name: "부산 중심부", code: "Busan" }, { name: "해운대구", code: "Haeundae" }, { name: "사하구", code: "Saha" },
-                { name: "진구", code: "Busanjin-gu" }, { name: "동래구", code: "Dongnae" }, { name: "금정구", code: "Geumjeong-gu" }, { name: "수영구", code: "Suyeong-gu" }
+                { name: "부산진구", code: "Busanjin-gu" }, { name: "동래구", code: "Dongnae" }, { name: "금정구", code: "Geumjeong-gu" }, 
+                { name: "수영구", code: "Suyeong-gu" }, { name: "기장군", code: "Gijang-gun" }, { name: "영도구", code: "Yeongdo-gu" }
             ],
             daegu: [
-                { name: "대구 중심부", code: "Daegu" }, { name: "수성구", code: "Suseong-gu" }, { name: "달서구", code: "Dalseo-gu" }, { name: "북구", code: "Buk-gu" }
+                { name: "대구 중심부", code: "Daegu" }, { name: "수성구", code: "Suseong-gu" }, { name: "달서구", code: "Dalseo-gu" }, 
+                { name: "북구", code: "Buk-gu" }, { name: "동구", code: "Dong-gu" }, { name: "달성군", code: "Dalseong-gun" }
             ],
             incheon: [
-                { name: "인천 중심부", code: "Incheon" }, { name: "송도국제도시", code: "Songdo" }, { name: "부평구", code: "Bupyeong" }, { name: "강화군", code: "Ganghwa-gun" }
+                { name: "인천 중심부", code: "Incheon" }, { name: "송도국제도시", code: "Songdo" }, { name: "부평구", code: "Bupyeong" }, 
+                { name: "강화군", code: "Ganghwa-gun" }, { name: "서구", code: "Seo-gu" }, { name: "남동구", code: "Namdong-gu" }, { name: "중구", code: "Jung-gu" }
             ],
             gwangju: [
-                { name: "광주 중심부", code: "Gwangju" }, { name: "북구", code: "Buk-gu" }, { name: "광산구", code: "Gwangsan-gu" }
+                { name: "광주 중심부", code: "Gwangju" }, { name: "북구", code: "Buk-gu" }, { name: "광산구", code: "Gwangsan-gu" },
+                { name: "서구", code: "Seo-gu" }, { name: "남구", code: "Nam-gu" }, { name: "동구", code: "Dong-gu" }
             ],
             daejeon: [
-                { name: "대전 중심부", code: "Daejeon" }, { name: "유성구", code: "Yuseong-gu" }, { name: "서구", code: "Seo-gu" }
+                { name: "대전 중심부", code: "Daejeon" }, { name: "유성구", code: "Yuseong-gu" }, { name: "서구", code: "Seo-gu" },
+                { name: "대덕구", code: "Daedeok-gu" }, { name: "중구", code: "Jung-gu" }, { name: "동구", code: "Dong-gu" }
             ],
             ulsan: [
-                { name: "울산 중심부", code: "Ulsan" }, { name: "남구", code: "Nam-gu" }, { name: "울주군", code: "Ulju-gun" }
+                { name: "울산 중심부", code: "Ulsan" }, { name: "남구", code: "Nam-gu" }, { name: "울주군", code: "Ulju-gun" },
+                { name: "중구", code: "Jung-gu" }, { name: "북구", code: "Buk-gu" }, { name: "동구", code: "Dong-gu" }
             ],
             sejong: [
                 { name: "세종특별자치시", code: "Sejong" }
             ],
             gyeonggi: [
-                { name: "수원시", code: "Suwon" }, { name: "고양시", code: "Goyang-si" }, { name: "성남 분당", code: "Seongnam" }, 
+                { name: "수원시", code: "Suwon" }, { name: "고양시", code: "Goyang-si" }, { name: "성남시 분당", code: "Seongnam" }, 
                 { name: "부천시", code: "Bucheon-si" }, { name: "용인시", code: "Yongin" }, { name: "안산시", code: "Ansan" }, 
                 { name: "안양시", code: "Anyang" }, { name: "평택시", code: "Pyeongtaek" }, { name: "의정부시", code: "Uijeongbu-si" }, 
                 { name: "파주시", code: "Paju" }, { name: "김포시", code: "Gimpo-si" }, { name: "광명시", code: "Gwangmyeong" },
-                { name: "화성시", code: "Hwaseong-si" }, { name: "구리시", code: "Guri" }, { name: "양평군", code: "Yangpyeong" }, { name: "가평군", code: "Gapyeong" }
+                { name: "화성시", code: "Hwaseong-si" }, { name: "구리시", code: "Guri" }, { name: "남양주시", code: "Namyangju" },
+                { name: "시흥시", code: "Siheung" }, { name: "이천시", code: "Icheon" }, { name: "양주시", code: "Yangju" },
+                { name: "양평군", code: "Yangpyeong" }, { name: "가평군", code: "Gapyeong" }, { name: "연천군", code: "Yeoncheon" }
             ],
             gangwon: [
                 { name: "춘천시", code: "Chuncheon" }, { name: "강릉시", code: "Gangneung" }, { name: "원주시", code: "Wonju" }, 
                 { name: "속초시", code: "Sokcho" }, { name: "동해시", code: "Donghae" }, { name: "홍천군", code: "Hongcheon" }, 
-                { name: "평창군", code: "Pyeongchang" }, { name: "정선군", code: "Jeongseon" }, { name: "철원군", code: "Cheorwon" }
+                { name: "평창군", code: "Pyeongchang" }, { name: "정선군", code: "Jeongseon" }, { name: "철원군", code: "Cheorwon" },
+                { name: "삼척시", code: "Samcheok" }, { name: "태백시", code: "Taebaek" }, { name: "횡성군", code: "Hoengseong" },
+                { name: "인제군", code: "Inje" }, { name: "양양군", code: "Yangyang" }, { name: "영월군", code: "Yeongwol" }
             ],
             chungbuk: [
                 { name: "청주시", code: "Cheongju" }, { name: "충주시", code: "Chungju" }, { name: "제천시", code: "Jecheon" }, 
-                { name: "음성군", code: "Eumseong" }, { name: "진천군", code: "Jincheon" }, { name: "옥천군", code: "Okcheon" }
+                { name: "음성군", code: "Eumseong" }, { name: "진천군", code: "Jincheon" }, { name: "옥천군", code: "Okcheon" },
+                { name: "영동군", code: "Yeongdong" }, { name: "증평군", code: "Jeongpyeong" }, { name: "괴산군", code: "Goesan" },
+                { name: "보은군", code: "Boeun" }, { name: "단양군", code: "Danyang" }
             ],
             chungnam: [
                 { name: "천안시", code: "Cheonan" }, { name: "아산시", code: "Asan" }, { name: "서산시", code: "Seosan" }, 
                 { name: "당진시", code: "Dangjin" }, { name: "공주시", code: "Gongju" }, { name: "보령시", code: "Boryeong" }, 
-                { name: "홍성군", code: "Hongseong" }, { name: "태안군", code: "Taean" }, { name: "논산시", code: "Nonsan" }
+                { name: "홍성군", code: "Hongseong" }, { name: "태안군", code: "Taean" }, { name: "논산시", code: "Nonsan" },
+                { name: "예산군", code: "Yesan" }, { name: "부여군", code: "Buyeo" }, { name: "서천군", code: "Seocheon" },
+                { name: "금산군", code: "Geumsan" }, { name: "청양군", code: "Cheongyang" }
             ],
             jeonbuk: [
                 { name: "전주시", code: "Jeonju" }, { name: "군산시", code: "Gunsan" }, { name: "익산시", code: "Iksan" }, 
                 { name: "정읍시", code: "Jeongeup" }, { name: "남원시", code: "Namwon" }, { name: "김제시", code: "Gimje" }, 
-                { name: "완주군", code: "Wanju" }, { name: "부안군", code: "Buan" }, { name: "고창군", code: "Gochang" }
+                { name: "완주군", code: "Wanju" }, { name: "부안군", code: "Buan" }, { name: "고창군", code: "Gochang" },
+                { name: "순창군", code: "Sunchang" }, { name: "임실군", code: "Imsil" }, { name: "무주군", code: "Muju" },
+                { name: "진안군", code: "Jinan" }, { name: "장수군", code: "Jangsu" }
             ],
             jeonnam: [
                 { name: "목포시", code: "Mokpo" }, { name: "여수시", code: "Yeosu" }, { name: "순천시", code: "Suncheon" }, 
                 { name: "나주시", code: "Naju" }, { name: "광양시", code: "Gwangyang" }, { name: "무안군", code: "Muan" }, 
-                { name: "해남군", code: "Haenam" }, { name: "고흥군", code: "Goheung" }, { name: "완도군", code: "Wando" }, { name: "진도군", code: "Jindo" }
+                { name: "해남군", code: "Haenam" }, { name: "고흥군", code: "Goheung" }, { name: "완도군", code: "Wando" }, 
+                { name: "진도군", code: "Jindo" }, { name: "담양군", code: "Damyang" }, { name: "보성군", code: "Boseong" },
+                { name: "화순군", code: "Hwasun" }, { name: "영광군", code: "Yeonggwang" }, { name: "장성군", code: "Jangseong" },
+                { name: "신안군", code: "Sinan-gun" }, { name: "구례군", code: "Gurye" }, { name: "곡성군", code: "Gokseong" }
             ],
             gyeongbuk: [
                 { name: "포항시", code: "Pohang" }, { name: "구미시", code: "Gumi" }, { name: "경주시", code: "Gyeongju" }, 
                 { name: "경산시", code: "Gyeongsan" }, { name: "안동시", code: "Andong" }, { name: "김천시", code: "Gimcheon" }, 
                 { name: "영주시", code: "Yeongju" }, { name: "영천시", code: "Yeongcheon" }, { name: "상주시", code: "Sangju" }, 
-                { name: "칠곡군", code: "Chilgok" }, { name: "울릉도", code: "Ulleungdo" }
+                { name: "칠곡군", code: "Chilgok" }, { name: "의성군", code: "Uiseong" }, { name: "성주군", code: "Seongju" },
+                { name: "예천군", code: "Yecheon" }, { name: "영덕군", code: "Yeongdeok" }, { name: "울진군", code: "Uljin" },
+                { name: "청도군", code: "Cheongdo" }, { name: "문경시", code: "Mungyeong" }, { name: "울릉도", code: "Ulleungdo" }
             ],
             gyeongnam: [
                 { name: "창원시", code: "Changwon" }, { name: "진주시", code: "Jinju" }, { name: "김해시", code: "Gimhae" }, 
                 { name: "양산시", code: "Yangsan" }, { name: "거제시", code: "Geoje" }, { name: "통영시", code: "Tongyeong" }, 
                 { name: "사천시", code: "Sacheon" }, { name: "밀양시", code: "Miryang" }, { name: "거창군", code: "Geochang" }, 
-                { name: "함안군", code: "Haman" }, { name: "창녕군", code: "Changnyeong" }, { name: "남해군", code: "Namhae" }, { name: "하동군", code: "Hadong" }
+                { name: "함양군", code: "Hamyang" }, { name: "산청군", code: "Sancheong" }, { name: "합천군", code: "Hapcheon" },
+                { name: "창녕군", code: "Changnyeong" }, { name: "남해군", code: "Namhae" }, { name: "하동군", code: "Hadong" },
+                { name: "고성군", code: "Goseong" }, { name: "의령군", code: "Uiryong" }, { name: "함안군", code: "Haman" }
             ],
             jeju: [
                 { name: "제주시 중심부", code: "Jeju" }, { name: "서귀포시", code: "Seogwipo" }, { name: "애월읍", code: "Aewol" }, { name: "성산읍", code: "Seongsan" }
@@ -286,37 +308,106 @@
             }
         }
 
+        // 🌧️ 리얼리스틱 사운드 합성 엔진 통합 파트
         function playAmbientSound(weather) {
             if (!isAudioPlaying || !audioCtx) return;
             stopAmbientSound();
 
-            const bufferSize = 2 * audioCtx.sampleRate;
-            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = noiseBuffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
-
-            const whiteNoise = audioCtx.createBufferSource();
-            whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true;
-
-            const filter = audioCtx.createBiquadFilter();
-            const gainNode = audioCtx.createGain();
-
-            if (weather === 'Rain' || weather === 'Drizzle' || weather === 'Thunderstorm') {
-                filter.type = 'highpass'; filter.frequency.setValueAtTime(1200, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
-            } else if (weather === 'Clouds' || weather === 'Mist' || weather === 'Fog') {
-                filter.type = 'lowpass'; filter.frequency.setValueAtTime(250, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            } else if (weather === 'Snow') {
-                filter.type = 'lowpass'; filter.frequency.setValueAtTime(80, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            } else {
-                filter.type = 'bandpass'; filter.frequency.setValueAtTime(600, audioCtx.currentTime); gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+            // 1. 갈색 소음(Brown Noise) 생성기: 중저음 중심의 현실적인 빗소리 레이어
+            const bufferSize = 4 * audioCtx.sampleRate;
+            const brownBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = brownBuffer.getChannelData(0);
+            
+            let lastOut = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                // 주파수 감쇄 공식으로 먹먹하고 포근한 자연의 비 사운드 유도
+                output[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = output[i];
+                output[i] *= 3.5; 
             }
 
-            whiteNoise.connect(filter); filter.connect(gainNode); gainNode.connect(audioCtx.destination);
-            whiteNoise.start(); ambientSourceNode = whiteNoise;
+            const rainBaseSource = audioCtx.createBufferSource();
+            rainBaseSource.buffer = brownBuffer;
+            rainBaseSource.loop = true;
+
+            const mainFilter = audioCtx.createBiquadFilter();
+            const mainGain = audioCtx.createGain();
+
+            if (weather === 'Rain' || weather === 'Drizzle' || weather === 'Thunderstorm') {
+                mainFilter.type = 'lowpass';
+                mainFilter.frequency.setValueAtTime(1400, audioCtx.currentTime); 
+                mainGain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+            } else if (weather === 'Clouds' || weather === 'Mist' || weather === 'Fog') {
+                mainFilter.type = 'lowpass';
+                mainFilter.frequency.setValueAtTime(300, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            } else if (weather === 'Snow') {
+                mainFilter.type = 'lowpass';
+                mainFilter.frequency.setValueAtTime(150, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            } else {
+                mainFilter.type = 'bandpass';
+                mainFilter.frequency.setValueAtTime(500, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.02, audioCtx.currentTime);
+            }
+
+            rainBaseSource.connect(mainFilter);
+            mainFilter.connect(mainGain);
+            mainGain.connect(audioCtx.destination);
+            rainBaseSource.start();
+
+            // 2. 무작위 공간감 빗방울(Raindrops Trigger) 엔진 (비 올 때만 구동)
+            let dropInterval = null;
+            if (weather === 'Rain' || weather === 'Thunderstorm') {
+                dropInterval = setInterval(() => {
+                    if (!isAudioPlaying || !audioCtx) { clearInterval(dropInterval); return; }
+                    
+                    if (Math.random() > 0.3) {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+
+                        osc.type = 'sine';
+                        const baseFreq = 120 + Math.random() * 230;
+                        osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+                        
+                        // "툭/탁" 하는 유리창 충격음 모사
+                        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.04);
+
+                        const dropVolume = 0.02 + Math.random() * 0.05;
+                        gain.gain.setValueAtTime(dropVolume, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+
+                        if (panner) {
+                            panner.pan.setValueAtTime(Math.random() * 2 - 1, audioCtx.currentTime);
+                            osc.connect(gain).connect(panner).connect(audioCtx.destination);
+                        } else {
+                            osc.connect(gain).connect(audioCtx.destination);
+                        }
+
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.05);
+                    }
+                }, 40);
+            }
+
+            ambientSourceNode = {
+                baseSource: rainBaseSource,
+                interval: dropInterval
+            };
         }
 
         function stopAmbientSound() {
-            if (ambientSourceNode) { try { ambientSourceNode.stop(); } catch(e) {} ambientSourceNode = null; }
+            if (ambientSourceNode) {
+                if (ambientSourceNode.baseSource) {
+                    try { ambientSourceNode.baseSource.stop(); } catch(e) {}
+                }
+                if (ambientSourceNode.interval) {
+                    clearInterval(ambientSourceNode.interval);
+                }
+                ambientSourceNode = null;
+            }
         }
 
         function saveMemo() { localStorage.setItem('weather_dashboard_memo', document.getElementById('memo-pad').value); }
