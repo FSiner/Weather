@@ -63,7 +63,7 @@
         .timeline-item { text-align: center; flex: 1; font-size: 0.8rem; }
         .memo-area { width: 100%; height: 60px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; padding: 8px; font-size: 0.85rem; resize: none; outline: none; }
 
-        .status-msg { font-size: 0.85rem; color: #ff6b6b; margin-top: 10px; display: none; }
+        .status-msg { font-size: 0.85rem; color: #ff6b6b; margin-top: 10px; display: none; text-align: center; padding: 8px; background: rgba(255,0,0,0.1); border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -156,8 +156,6 @@
         let ambientSourceNode = null;
         let isAudioPlaying = false;
         let currentWeatherData = "Default";
-
-        // 메모리 버퍼 사전 렌더링 풀
         let preRenderedBuffers = {};
 
         const regionDatabase = {
@@ -268,7 +266,7 @@
             if(!val) { alert("올바른 API 키를 입력하세요."); return; }
             localStorage.setItem('user_openweather_key', val);
             document.getElementById('api-ui-block').style.display = 'none';
-            alert("API 키가 브라우저에 안전하게 보존되었습니다! 이제 지역을 선택해 보세요.");
+            alert("API 키가 브라우저에 등록되었습니다.");
             if(targetCityCode) initWeatherSync();
         }
 
@@ -299,30 +297,27 @@
             }
         }
 
-        // 🎵 고품질 사전 렌더링 오디오 데이터 설계 엔진
+        // 🎵 안전한 메모리 사전 렌더링 오디오 파형 디자인
         function initAudioEngine() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
             const sampleRate = audioCtx.sampleRate;
-            const bufferSeconds = 5; // 루프용 5초 버퍼 크기
+            const bufferSeconds = 6; 
             const numSamples = sampleRate * bufferSeconds;
 
-            // 1. 갈색 오디오 소스 프리-버퍼링 (포근한 빗소리/바람 베이스)
             if (!preRenderedBuffers['brown']) {
                 const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
                 const data = buffer.getChannelData(0);
                 let lastOut = 0.0;
                 for (let i = 0; i < numSamples; i++) {
                     const white = Math.random() * 2 - 1;
-                    // 저음 가중치 순수 하드웨어 필터식 모사
-                    data[i] = (lastOut + (0.02 * white)) / 1.02;
+                    data[i] = (lastOut + (0.018 * white)) / 1.018; // 지직거림을 잡기 위해 상수를 더 부드럽게 조정
                     lastOut = data[i];
-                    data[i] *= 3.5; // 자연스러운 진폭 스케일링
+                    data[i] *= 3.8; 
                 }
                 preRenderedBuffers['brown'] = buffer;
             }
 
-            // 2. 핑크 오디오 소스 프리-버퍼링 (부드러운 미세 자연 앰비언스)
             if (!preRenderedBuffers['pink']) {
                 const buffer = audioCtx.createBuffer(1, numSamples, sampleRate);
                 const data = buffer.getChannelData(0);
@@ -337,7 +332,7 @@
                     b5 = -0.7616 * b5 - white * 0.0168980;
                     data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
                     b6 = white * 0.115926;
-                    data[i] *= 0.11; 
+                    data[i] *= 0.12; 
                 }
                 preRenderedBuffers['pink'] = buffer;
             }
@@ -360,37 +355,37 @@
             if (!isAudioPlaying || !audioCtx) return;
             stopAmbientSound();
 
+            // 버퍼가 아직 생성 안 되었을 경우 예방책
+            if(!preRenderedBuffers['brown'] || !preRenderedBuffers['pink']) {
+                initAudioEngine();
+            }
+
             const mainFilter = audioCtx.createBiquadFilter();
             const mainGain = audioCtx.createGain();
             let sourceNode = audioCtx.createBufferSource();
 
-            // 날씨 식별자 가공
             const condition = weather === 'Drizzle' || weather === 'Thunderstorm' ? 'Rain' : weather;
 
             if (condition === 'Rain') {
-                // 비: 고밀도 갈색 노이즈 레이어 + 로우패스 필터 결합
                 sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(1100, audioCtx.currentTime); 
-                mainGain.gain.setValueAtTime(0.28, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(1000, audioCtx.currentTime); // 고음 차단선을 더 내려 지직거림 원천 봉쇄
+                mainGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
             } else if (condition === 'Clouds' || condition === 'Mist' || condition === 'Fog') {
-                // 흐림: 깊고 은은하게 흔들리는 초저음 바람소리
                 sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(220, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(180, audioCtx.currentTime); // 아주 낮은 동굴 바람 소리 질감
+                mainGain.gain.setValueAtTime(0.32, audioCtx.currentTime);
             } else if (condition === 'Snow') {
-                // 눈: 소리가 완벽히 차단된 정적의 먹먹함
                 sourceNode.buffer = preRenderedBuffers['pink'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(120, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(100, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.15, audioCtx.currentTime);
             } else {
-                // 맑음/기본: 투명하게 맑은 자연 앰비언트 리버브
                 sourceNode.buffer = preRenderedBuffers['pink'];
                 mainFilter.type = 'bandpass';
-                mainFilter.frequency.setValueAtTime(450, audioCtx.currentTime);
-                mainGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+                mainFilter.frequency.setValueAtTime(400, audioCtx.currentTime);
+                mainGain.gain.setValueAtTime(0.03, audioCtx.currentTime);
             }
 
             sourceNode.loop = true;
@@ -399,29 +394,27 @@
             mainGain.connect(audioCtx.destination);
             sourceNode.start();
 
-            // ☔ 실시간 입체 빗방울 엔진 (오류 없는 가벼운 개별 타격 방식)
             let dropInterval = null;
             if (condition === 'Rain') {
                 dropInterval = setInterval(() => {
                     if (!isAudioPlaying || !audioCtx) { clearInterval(dropInterval); return; }
                     
-                    if (Math.random() > 0.35) {
+                    if (Math.random() > 0.38) {
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
                         const panner = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
 
                         osc.type = 'sine';
-                        // 물방울 타격 구간 주파수 디자인
-                        const randomFreq = 140 + Math.random() * 210;
+                        const randomFreq = 130 + Math.random() * 190;
                         osc.frequency.setValueAtTime(randomFreq, audioCtx.currentTime);
-                        osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.035);
+                        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.035);
 
-                        const targetVol = 0.015 + Math.random() * 0.045;
+                        const targetVol = 0.01 + Math.random() * 0.035;
                         gain.gain.setValueAtTime(targetVol, audioCtx.currentTime);
                         gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.035);
 
                         if (panner) {
-                            panner.pan.setValueAtTime(Math.random() * 1.8 - 0.9, audioCtx.currentTime);
+                            panner.pan.setValueAtTime(Math.random() * 1.6 - 0.8, audioCtx.currentTime);
                             osc.connect(gain).connect(panner).connect(audioCtx.destination);
                         } else {
                             osc.connect(gain).connect(audioCtx.destination);
@@ -430,7 +423,7 @@
                         osc.start();
                         osc.stop(audioCtx.currentTime + 0.04);
                     }
-                }, 45);
+                }, 50);
             }
 
             ambientSourceNode = {
@@ -477,7 +470,7 @@
         }
 
         function initWeatherSync() {
-            if (!getApiKey()) { alert("오픈웨더 API 키를 먼저 등록해 주세요!"); return; }
+            if (!getApiKey()) return;
             if (liveTimer) clearInterval(liveTimer);
             fetchSmartDashboardData(targetCityCode);
             liveTimer = setInterval(() => fetchSmartDashboardData(targetCityCode), 600000);
@@ -486,12 +479,14 @@
         async function fetchSmartDashboardData(cityCode) {
             const statusMsg = document.getElementById('status-msg');
             const KEY = getApiKey();
+            if(!cityCode || !KEY) return; // 변수 부재 시 비동기 에러 사전 통제
+
             const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
             const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
 
             try {
                 const [cRes, fRes] = await Promise.all([fetch(currentUrl), fetch(forecastUrl)]);
-                if (!cRes.ok) throw new Error('API 연동에 오류가 발생했습니다. 키 값을 확인해 주세요.');
+                if (!cRes.ok) throw new Error('API 연동에 오류가 발생했습니다. 키 값 또는 도시 코드를 확인해 주세요.');
                 
                 const currentData = await cRes.json();
                 const forecastData = await fRes.json();
@@ -510,7 +505,9 @@
             const isNight = iconCode.includes('n');
 
             const subSel = document.getElementById('sub-region');
-            document.getElementById('location').innerText = subSel.options[subSel.selectedIndex].text;
+            if(subSel.selectedIndex >= 0) {
+                document.getElementById('location').innerText = subSel.options[subSel.selectedIndex].text;
+            }
             document.getElementById('temp').innerText = `${temp}°`;
             document.getElementById('description').innerText = cData.weather[0].description;
 
@@ -587,9 +584,11 @@
             canvas = document.getElementById('particle-canvas'); ctx = canvas.getContext('2d');
             window.addEventListener('resize', resizeCanvas); resizeCanvas();
 
+            // 오디오 버퍼 선행 구축으로 연산 지연 오류 완벽 봉쇄
+            initAudioEngine();
+
             if(getApiKey()) {
                 document.getElementById('api-ui-block').style.display = 'none';
-                initAudioEngine(); // 키가 있을 시 선제 오디오 버퍼 로드
             }
 
             const savedMemo = localStorage.getItem('weather_dashboard_memo');
