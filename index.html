@@ -29,18 +29,12 @@
             transition: opacity 0.5s ease;
         }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; gap: 8px; }
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 8px; }
         .clock-box { font-size: 2rem; font-weight: 700; letter-spacing: 1px; flex-grow: 1; }
         
         .ctrl-btn { background: rgba(255,255,255,0.12); border: none; padding: 8px 14px; color: white; border-radius: 20px; cursor: pointer; font-size: 0.75rem; font-weight: bold; transition: 0.2s; white-space: nowrap; }
         .ctrl-btn:hover { background: rgba(255,255,255,0.25); }
         .audio-on { background: rgba(76, 175, 80, 0.3); border: 1px solid rgba(76, 175, 80, 0.5); }
-
-        .api-config-box { background: rgba(255, 152, 0, 0.15); border: 1px dashed rgba(255, 152, 0, 0.4); padding: 12px; border-radius: 12px; margin-bottom: 15px; font-size: 0.85rem; }
-        .api-input-group { display: flex; gap: 6px; margin-top: 8px; }
-        .api-input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-size: 0.8rem; outline: none; }
-        .api-save-btn { background: #ff9800; border: none; padding: 6px 12px; color: black; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
-        .api-save-btn:hover { background: #e68a00; }
 
         .select-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         .weather-select {
@@ -78,14 +72,6 @@
                 <div id="clock" class="clock-box">00:00:00</div>
                 <button class="ctrl-btn" id="audio-trigger" onclick="toggleAudio()">사운드 OFF 🔇</button>
                 <button class="ctrl-btn" id="pomo-trigger" onclick="togglePomodoro()">집중 모드 ⏱️</button>
-            </div>
-
-            <div class="api-config-box" id="api-ui-block">
-                <div>⚠️ <b>공공 사용을 위한 설정:</b> 오픈웨더 API 키를 입력해 주세요. 키는 유저 본인의 브라우저에만 안전하게 저장됩니다.</div>
-                <div class="api-input-group">
-                    <input type="password" id="api-user-key" class="api-input" placeholder="OpenWeatherMap API Key 입력">
-                    <button class="api-save-btn" onclick="saveUserApiKey()">등록</button>
-                </div>
             </div>
 
             <div class="select-group">
@@ -145,6 +131,12 @@
     </div>
 
     <script>
+        // ==========================================
+        // 여기에 본인의 OpenWeatherMap API Key를 직접 입력하세요.
+        // 입력 후 저장하면 화면에 입력창 없이 바로 작동합니다.
+        // ==========================================
+        const MY_FIXED_API_KEY = "dd402647dbf999df8ab39577b3a85895";
+
         let targetCityCode = "";
         let liveTimer = null;
         let canvas, ctx, animationFrameId;
@@ -259,17 +251,6 @@
         const backgroundsDay = { Clear: 'linear-gradient(135deg, #f7b733, #fc4a1a)', Clouds: 'linear-gradient(135deg, #bdc3c7, #2c3e50)', Rain: 'linear-gradient(135deg, #4b6cb7, #182848)', Snow: 'linear-gradient(135deg, #e6dada, #274046)', Default: 'linear-gradient(135deg, #2c3e50, #000000)' };
         const backgroundsNight = { Clear: 'linear-gradient(135deg, #0f2027, #2c5364)', Clouds: 'linear-gradient(135deg, #111318, #2c3e50)', Rain: 'linear-gradient(135deg, #050c1a, #1a2a44)', Snow: 'linear-gradient(135deg, #1c262f, #3b4d5c)', Default: 'linear-gradient(135deg, #0f1115, #000000)' };
 
-        function getApiKey() { return localStorage.getItem('user_openweather_key') || ""; }
-
-        function saveUserApiKey() {
-            const val = document.getElementById('api-user-key').value.trim();
-            if(!val) { alert("올바른 API 키를 입력하세요."); return; }
-            localStorage.setItem('user_openweather_key', val);
-            document.getElementById('api-ui-block').style.display = 'none';
-            alert("API 키가 브라우저에 등록되었습니다.");
-            if(targetCityCode) initWeatherSync();
-        }
-
         function startClock() {
             setInterval(() => {
                 if(isPomoActive) return;
@@ -297,7 +278,6 @@
             }
         }
 
-        // 🎵 안전한 메모리 사전 렌더링 오디오 파형 디자인
         function initAudioEngine() {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             
@@ -311,7 +291,7 @@
                 let lastOut = 0.0;
                 for (let i = 0; i < numSamples; i++) {
                     const white = Math.random() * 2 - 1;
-                    data[i] = (lastOut + (0.018 * white)) / 1.018; // 지직거림을 잡기 위해 상수를 더 부드럽게 조정
+                    data[i] = (lastOut + (0.018 * white)) / 1.018;
                     lastOut = data[i];
                     data[i] *= 3.8; 
                 }
@@ -355,7 +335,6 @@
             if (!isAudioPlaying || !audioCtx) return;
             stopAmbientSound();
 
-            // 버퍼가 아직 생성 안 되었을 경우 예방책
             if(!preRenderedBuffers['brown'] || !preRenderedBuffers['pink']) {
                 initAudioEngine();
             }
@@ -369,12 +348,12 @@
             if (condition === 'Rain') {
                 sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(1000, audioCtx.currentTime); // 고음 차단선을 더 내려 지직거림 원천 봉쇄
+                mainFilter.frequency.setValueAtTime(1000, audioCtx.currentTime);
                 mainGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
             } else if (condition === 'Clouds' || condition === 'Mist' || condition === 'Fog') {
                 sourceNode.buffer = preRenderedBuffers['brown'];
                 mainFilter.type = 'lowpass';
-                mainFilter.frequency.setValueAtTime(180, audioCtx.currentTime); // 아주 낮은 동굴 바람 소리 질감
+                mainFilter.frequency.setValueAtTime(180, audioCtx.currentTime);
                 mainGain.gain.setValueAtTime(0.32, audioCtx.currentTime);
             } else if (condition === 'Snow') {
                 sourceNode.buffer = preRenderedBuffers['pink'];
@@ -470,7 +449,12 @@
         }
 
         function initWeatherSync() {
-            if (!getApiKey()) return;
+            if (MY_FIXED_API_KEY === "여기에_본인의_오픈웨더_API_키를_넣으세요" || !MY_FIXED_API_KEY) {
+                const statusMsg = document.getElementById('status-msg');
+                statusMsg.innerText = "코드의 MY_FIXED_API_KEY 변수에 오픈웨더 API 키를 입력해 주세요.";
+                statusMsg.style.display = 'block';
+                return;
+            }
             if (liveTimer) clearInterval(liveTimer);
             fetchSmartDashboardData(targetCityCode);
             liveTimer = setInterval(() => fetchSmartDashboardData(targetCityCode), 600000);
@@ -478,15 +462,14 @@
 
         async function fetchSmartDashboardData(cityCode) {
             const statusMsg = document.getElementById('status-msg');
-            const KEY = getApiKey();
-            if(!cityCode || !KEY) return; // 변수 부재 시 비동기 에러 사전 통제
+            if(!cityCode || !MY_FIXED_API_KEY) return;
 
-            const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
-            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${cityCode},KR&appid=${KEY}&units=metric&lang=kr`;
+            const currentUrl = `https://api.openweathermap.org/data/2.5/weather?q=${cityCode},KR&appid=${MY_FIXED_API_KEY}&units=metric&lang=kr`;
+            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${cityCode},KR&appid=${MY_FIXED_API_KEY}&units=metric&lang=kr`;
 
             try {
                 const [cRes, fRes] = await Promise.all([fetch(currentUrl), fetch(forecastUrl)]);
-                if (!cRes.ok) throw new Error('API 연동에 오류가 발생했습니다. 키 값 또는 도시 코드를 확인해 주세요.');
+                if (!cRes.ok) throw new Error('오픈웨더 API 연동 실패. 키 값이 올바른지 다시 확인해 주세요.');
                 
                 const currentData = await cRes.json();
                 const forecastData = await fRes.json();
@@ -584,12 +567,7 @@
             canvas = document.getElementById('particle-canvas'); ctx = canvas.getContext('2d');
             window.addEventListener('resize', resizeCanvas); resizeCanvas();
 
-            // 오디오 버퍼 선행 구축으로 연산 지연 오류 완벽 봉쇄
             initAudioEngine();
-
-            if(getApiKey()) {
-                document.getElementById('api-ui-block').style.display = 'none';
-            }
 
             const savedMemo = localStorage.getItem('weather_dashboard_memo');
             if(savedMemo) document.getElementById('memo-pad').value = savedMemo;
@@ -599,7 +577,7 @@
             if (savedMain && savedSub) {
                 document.getElementById('main-region').value = savedMain; updateSubRegions();
                 document.getElementById('sub-region').value = savedSub; targetCityCode = savedSub;
-                if(getApiKey()) initWeatherSync();
+                initWeatherSync();
             }
         }
     </script>
